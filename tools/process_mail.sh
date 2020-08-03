@@ -54,8 +54,6 @@ if [ "$ARCHIVE_TYPE" = "patchwork" ]; then
 		echo "Unable to parse Patchwork ID for ${MAIL}: empty Patchwork ID"
 		exit 0
 	fi
-	# Always surround emails by <> tags. PaStA needs them in order to
-	# classify them as emails
 	PATCHWORK_ID=" ${PATCHWORK_ID}"
 fi
 
@@ -65,6 +63,9 @@ if [ "$ID" = "" ]; then
 	exit 0
 elif [[ "$ID" =~ $whitespace_pattern ]]; then
 	echo "Unable to parse Message ID for ${MAIL}: contains whitespaces"
+	exit 0
+elif ! [[ "$ID" =~ \<.*\> ]]; then
+	echo "Unable to parse Message ID for ${MAIL}: Invalid Message-ID format: ${ID}"
 	exit 0
 fi
 

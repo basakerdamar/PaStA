@@ -14,6 +14,7 @@ import os
 import pickle
 import re
 
+from collections import defaultdict
 from email.header import Header
 from anytree import Node, RenderTree
 from itertools import chain
@@ -47,7 +48,6 @@ def sanitise_header(message, header):
 
 def get_irts(id):
     messages = _mbox.get_messages(id)
-    ret = None
     irt = set()
     ids = set()
 
@@ -57,23 +57,20 @@ def get_irts(id):
 
     irt -= ids
 
-    if len(irt):
-        ret = set(irt)
-
-    return id, ret
+    return id, irt
 
 
 class MailThread:
     def __init__(self, mbox, f_cache):
         self.f_cache = f_cache
-        self.reply_to_map = dict()
+        self.reply_to_dict = defaultdict(set)
         self.parents = set()
         self.mbox = mbox
 
     def update(self, parallelise=True):
         log.info('Updating mail thread cache')
         all_messages = self.mbox.get_ids(allow_invalid=True)
-        present = set(chain.from_iterable(self.reply_to_map.values()))
+        present = set(chain.from_iterable(self.reply_to_dict.values()))
         victims = all_messages - present - self.parents
         length = len(victims)
         if len(victims) == 0:
@@ -102,9 +99,7 @@ class MailThread:
 
             # Otherwise, let the father point to his children
             for irt in irts:
-                if irt not in self.reply_to_map:
-                    self.reply_to_map[irt] = set()
-                self.reply_to_map[irt].add(id)
+                self.reply_to_dict[irt].add(id)
 
         log.info('Writing mailbox thread cache...')
         _mbox = self.mbox
@@ -120,16 +115,16 @@ class MailThread:
         # visited tracks visited mails, used to eliminate cycles
         visited.add(this_id)
 
-        if this_id not in self.reply_to_map:
+        if this_id not in self.reply_to_dict:
             return
-        responses = self.reply_to_map[this_id]
+        responses = self.reply_to_dict[this_id]
 
         for response in responses:
             if response in visited:
                 continue
 
             child = Node(response, parent=node)
-            if response not in self.reply_to_map:
+            if response not in self.reply_to_dict:
                 continue
             self._get_thread(child, visited)
 
@@ -140,7 +135,6 @@ class MailThread:
                 print('%.20s\t\t%s%s' % (message['From'], pre, node.name))
             else: # We may have a virtual email
                 print('%.20s\t\t %s' % ('VIRTUAL EMAIL', node.name))
-
 
     def get_parent(self, message_id, visited):
         # visited tracks visited mails, used to eliminate cycles
@@ -174,9 +168,12 @@ class MailThread:
 
         return message_id
 
-    def get_thread(self, message_id):
-        parent = self.get_parent(message_id, set())
-        head = Node(parent)
+    def get_thread(self, message_id, subthread=False):
+        if subthread:
+            head = message_id
+        else:
+            head = self.get_parent(message_id, set())
+        head = Node(head)
         self._get_thread(head, set())
         return head
 

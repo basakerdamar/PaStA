@@ -24,6 +24,14 @@ and accuracy of PaStA:
 - [Observing Custom Software Modifications: A Quantitative Approach of Tracking the Evolution of Patch Stacks](https://arxiv.org/abs/1607.00905)
 - [The List is the Process: Reliable Pre-Integration Tracking of Commits on Mailing Lists](https://arxiv.org/pdf/1902.03147.pdf)
 
+Presentation resources:
+
+- This [LPC 2019 recording](https://www.youtube.com/watch?v=QG1YDQ1HOKE) and
+  [Embedded Linux Conference Europe 2019 recording](https://www.youtube.com/watch?v=YCfU-2dXDq0)
+  present core ideas behind the project. Slides:
+  [here](https://static.sched.com/hosted_files/osseu19/5c/pasta-elce19.pdf)
+- The whole presentation is summarised in [this](https://lwn.net/Articles/804511/) article.
+
 Getting PaStA
 -------------
 
@@ -64,7 +72,7 @@ download the required dependencies.
 Getting started
 ---------------
 - Select the active project configuration
-  `./pasta select linux`
+  `./pasta set_config linux`
 - Run PaStA `./pasta -h`
 
 Running PaStA
@@ -201,9 +209,9 @@ UPSTREAM = v1.0..v2.0
 ```
 
 ### Set active configuration
-Use the `select` command to set the active configuration. E.g.:
+Use the `set_config` command to set the active configuration. E.g.:
 ```
-$ ./pasta select linux
+$ ./pasta set_config linux
 ```
 
 All further calls on **PaStA** tools will use this configuration file. To use a
@@ -224,7 +232,7 @@ PaStA will save those patches in a commit cache file. This file can be used for
 further analysis and is compared against all 'upstream' commits (master
 branch).
 
-1. `./pasta select linux`
+1. `./pasta set_config linux`
 2. Either get mailboxes. PaStA supports raw unix-style mailboxes and public
    inboxes, and add them to the configuration. Use the linux project
    configuration as a reference. There are several possibilities to acquire

@@ -51,6 +51,8 @@ def decode_payload(message):
 
 
 class PatchMail(MessageDiff):
+    REGEX_RAW_DIFF = re.compile(r'---.*\n\+\+\+.*\n.*', re.MULTILINE)
+
     @staticmethod
     def extract_patch_mail(mail):
         id = mail['message-id']
@@ -78,7 +80,8 @@ class PatchMail(MessageDiff):
         for p in payload:
             try:
                 m = email.message_from_string(p)
-                if len(m.defects) or len(m.keys()) == 0:
+                # If there's no from, we probably have no real mail
+                if len(m.defects) or len(m.keys()) == 0 or 'From' not in m:
                     continue
 
                 # Hey, we have a valid email as attachment. Use it.
@@ -87,10 +90,26 @@ class PatchMail(MessageDiff):
             except:
                 pass
 
-        if len(payload) >= 2 and \
-           isinstance(payload[0], str) and isinstance(payload[1], str) and \
-           True in ['diff --' in x for x in payload]:
-            return mail, payload[0] + payload[1]
+        if len(payload) >= 2:
+            msg = str()
+            diff = str()
+            for p in payload:
+                if not isinstance(p, str):
+                    continue
+
+                s = p.split('\n')
+                if any(map(lambda line: line.startswith('diff --'), s)) or \
+                       any(map(lambda line: line.startswith('Index: '), s)) or \
+                       PatchMail.REGEX_RAW_DIFF.match(p):
+                    diff += p + '\n'
+                else:
+                    msg += p + '\n'
+
+            # We need at least len(diff). len(msg) doesn't make sense: The
+            # commit message may hide inside the diff part. Later, let the
+            # splitting approach decide.
+            if len(diff):
+                return mail, msg + diff + '\n'
 
         for p in payload:
             if 'From: ' in p or 'diff --' in p:
@@ -220,6 +239,10 @@ class MailContainer:
             index[message_id].append((dtime, date, location) + patchwork_id)
 
         return index
+
+    # Default handler for get_patchwork_ids: Assume that they are not present.
+    def get_patchwork_ids(self, message_id):
+        return set()
 
     def write_index(self, f_index):
         index = list()
@@ -426,8 +449,12 @@ class PatchworkProject(MailContainer):
     def _pull_patch(url):
         resp = requests.get(url)
         resp.raise_for_status()
-        md5sum = hashlib.md5(resp.content).hexdigest()
-        return md5sum, resp.content
+        # Add a trailing newline. This is required that the hash that is
+        # received via API has the same MD5 sum as the ones that were
+        # imported via the initial_mbox
+        content = resp.content + b'\n'
+        md5sum = hashlib.md5(content).hexdigest()
+        return md5sum, content
 
     def update(self):
         if self.f_mbox_raw:
@@ -639,9 +666,9 @@ class Mbox:
     def get_patchwork_ids(self, message_id):
         ret = set()
 
-        for project in self.patchwork_projects:
-            if message_id in project:
-                ret |= project.get_patchwork_ids(message_id)
+        for mbox in self.mboxes:
+            if message_id in mbox:
+                ret |= mbox.get_patchwork_ids(message_id)
 
         return ret
 

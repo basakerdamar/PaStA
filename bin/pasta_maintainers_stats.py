@@ -49,19 +49,7 @@ def walk_commit_tree(tree):
     return results
 
 
-def get_tree(repo, revision):
-    if revision == 'HEAD':
-        return repo.revparse_single(repo.head.name).tree
-
-    if revision.startswith('v'):
-        revision = repo.lookup_reference('refs/tags/%s' % revision).target
-    commit_hash = repo[revision].target
-    tree = repo[commit_hash].tree
-
-    return tree
-
-
-def get_file_map(filename):
+def get_file_infos(filename):
     blob = _tmp_tree[filename]
     lines = blob.data.count(b'\n')
     size = blob.size
@@ -143,7 +131,7 @@ def maintainers_stats(config, argv):
     log.info('Working on kernel revision %s' % kernel_revision)
 
     all_maintainers = LinuxMaintainers(repo, kernel_revision)
-    tree = get_tree(repo.repo, kernel_revision)
+    tree = repo.get_tree(kernel_revision)
     all_filenames = walk_commit_tree(tree)
     result = list()
 
@@ -168,7 +156,7 @@ def maintainers_stats(config, argv):
     _all_maintainers = all_maintainers
     processes = int(cpu_count())
     p = Pool(processes=processes, maxtasksperchild=1)
-    file_map = p.map(get_file_map, all_filenames)
+    file_map = p.map(get_file_infos, all_filenames)
     p.close()
     p.join()
 
@@ -198,18 +186,18 @@ def maintainers_stats(config, argv):
             object_files[mtr].add(file)
             object_stats[mtr].update(lines=lines, size=size)
 
-    def _filter_sections(section, lines, size):
-        relevant[section].update(lines=lines, size=size)
+    def _filter_maintainers(section, lines, size):
+        _, mtrs, _ = all_maintainers.get_maintainers(section)
+        for mtr in mtrs:
+            relevant[mtr].update(lines=lines, size=size)
 
     # Routines that are chosen in case of --group-by sections
     def _evaluator_sections(file, lines, size, section):
         object_files[section].add(file)
         object_stats[section].update(lines=lines, size=size)
 
-    def _filter_maintainers(section, lines, size):
-        _, mtrs, _ = all_maintainers.get_maintainers(section)
-        for mtr in mtrs:
-            relevant[mtr].update(lines=lines, size=size)
+    def _filter_sections(section, lines, size):
+        relevant[section].update(lines=lines, size=size)
     #############################################
 
     # Choose the right routines
