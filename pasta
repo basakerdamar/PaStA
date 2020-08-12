@@ -32,12 +32,9 @@ from bin.pasta_check_mbox import check_mbox
 from bin.pasta_clusterstats import clusterstats
 from bin.pasta_compare import compare
 from bin.pasta_compare_clusters import compare_clusters
-<<<<<<< HEAD
 from bin.pasta_maintainers_stats import maintainers_stats
-=======
 from bin.pasta_evaluate_patches import evaluate_patches
 from bin.pasta_offlist import offlist
->>>>>>> 3dba5ff... add pasta offlist
 from bin.pasta_optimise_cluster import optimise_cluster
 from bin.pasta_prepare_evaluation import prepare_evaluation
 from bin.pasta_rate import rate
@@ -173,17 +170,13 @@ def main(argv):
     elif sub == 'statistics':
         return statistics(config, argv)
     elif sub == 'compare_stacks':
-<<<<<<< HEAD
         return compare_stacks(config, argv)
     elif sub == 'form_patchwork_relations':
         return form_patchwork_relations(config, argv)
     elif sub == 'maintainers_stats':
         return maintainers_stats(config, argv)
-=======
-        return compare_stacks(config, sub, argv)
     elif sub == 'offlist':
         return offlist(config, sub, argv)
->>>>>>> 3dba5ff... add pasta offlist
     elif sub == 'patch_descriptions':
         return patch_descriptions(config, argv)
     elif sub == 'ripup':
