@@ -410,7 +410,7 @@ class Mbox:
                     else:
                         if shard == 0:
                             log.error('Unable to find shard 0 of list %s' %
-                                      listname)
+                                      mailinglist)
                             quit()
                         break
 
