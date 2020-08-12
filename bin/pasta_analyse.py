@@ -83,6 +83,18 @@ def find_cherries(repo, commit_hashes, dest_list):
     return cherries
 
 
+def remove_from_cluster(message, cluster, ids):
+    log.warning('PATCH-GROUPS CONTAINS %d %s THAT ARE NOT '
+                'REACHABLE BY THE CURRENT CONFIGURATION' % (len(ids), message))
+    log.warning('Those messages will be removed from the result')
+    log.warning('Waiting 5 seconds before starting. Press Ctrl-C to '
+                'abort.')
+    sleep(5)
+    for unreachable in ids:
+        cluster.remove_element(unreachable)
+    cluster.optimize()
+
+
 def analyse(config, argv):
     parser = argparse.ArgumentParser(prog='analyse', description='Analyse patch stacks')
 
@@ -102,10 +114,6 @@ def analyse(config, argv):
                         default=config.thresholds.author_date_interval,
                         help='Author date interval (default: %(default)s)')
 
-    parser.add_argument('-er', dest='er_filename', metavar='filename',
-                        default=config.f_evaluation_result,
-                        help='Evaluation result PKL filename')
-
     parser.add_argument('-cpu', dest='cpu_factor', metavar='cpu', type=float,
                         default=1.0, help='CPU factor for parallelisation '
                                           '(default: %(default)s)')
@@ -124,12 +132,6 @@ def analyse(config, argv):
                              'upstream: '
                              'compare representatives against upstream - '
                              '(default: %(default)s)')
-
-    parser.add_argument('-upstream', dest='upstream_range',
-                        metavar='<revision range>', default=None,
-                        help='Specify upstream revision range, '
-                             'e.g.: v0.1..v0.2 (default: %s)' %
-                             config.upstream_range)
 
     args = parser.parse_args(argv)
 
@@ -177,24 +179,15 @@ def analyse(config, argv):
             # we might have loaded invalid emails, so reload the victim list once
             # more. This time, include all patches from the pre-existing (partial)
             # result, and check if all patches are reachable
-            victims = repo.mbox.get_ids(config.mbox_time_window) | \
-                    cluster.get_downstream()
+            victims |= cluster.get_downstream()
 
             # in case of an mbox analysis, we will definitely need all untagged
             # commit hashes as we need to determine the representative system for
             # both modes, rep and upstream.
             available = repo.cache_commits(victims)
-            if available != victims:
-                missing = victims - available
-                log.warning('MAILBOX RESULT CONTAINS %d MESSAGES THAT ARE NOT '
-                            'REACHABLE BY THE MAILBOX CONFIGURATION' % len(missing))
-                log.warning('Those messages will be removed from the result')
-                log.warning('Waiting 5 seconds before starting. Press Ctrl-C to '
-                            'abort.')
-                sleep(5)
-                for miss in missing:
-                    cluster.remove_element(miss)
-                cluster.optimize()
+            unreachable = victims - available
+            if unreachable:
+                remove_from_cluster('MESSAGES', cluster, unreachable)
                 victims = available
 
             if args.linux:
@@ -277,10 +270,10 @@ def analyse(config, argv):
         log.info('  ↪ done')
 
         if mode == 'upstream':
-            if args.upstream_range is not None:
-                candidates = set(repo.get_commithash_range(args.upstream_range))
-            else:
-                candidates = set(config.upstream_hashes)
+            candidates = set(config.upstream_hashes)
+            unreachable = cluster.get_upstream() - candidates
+            if unreachable:
+                remove_from_cluster('COMMITS', cluster, unreachable)
 
             fill_result(candidates, True)
 
@@ -311,4 +304,4 @@ def analyse(config, argv):
         log.info('  ↪ done.')
 
     evaluation_result.merge(cherries)
-    evaluation_result.to_file(args.er_filename)
+    evaluation_result.to_file(config.f_evaluation_result)
