@@ -33,8 +33,8 @@ from bin.pasta_clusterstats import clusterstats
 from bin.pasta_compare import compare
 from bin.pasta_compare_clusters import compare_clusters
 from bin.pasta_maintainers_stats import maintainers_stats
-from bin.pasta_evaluate_patches import evaluate_patches
 from bin.pasta_offlist import offlist
+from bin.pasta_offlist_evaluate import offlist_evaluate
 from bin.pasta_optimise_cluster import optimise_cluster
 from bin.pasta_prepare_evaluation import prepare_evaluation
 from bin.pasta_rate import rate
@@ -177,6 +177,8 @@ def main(argv):
         return maintainers_stats(config, argv)
     elif sub == 'offlist':
         return offlist(config, sub, argv)
+    elif sub == 'offlist_evaluate':
+        return offlist_evaluate(config, sub, argv)
     elif sub == 'patch_descriptions':
         return patch_descriptions(config, argv)
     elif sub == 'ripup':

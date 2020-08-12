@@ -72,6 +72,7 @@ def offlist_evaluate(config, prog, argv):
                                                                   [['upstream']]
     offlist.dropna(inplace=True)
 
+<<<<<<< HEAD
     offlist = pd.merge(offlist, df_repo, on = 'commit', how='left')
 =======
     offlist = pd.merge(offlist, df_repo, on = 'upstream', how='left')
@@ -79,6 +80,9 @@ def offlist_evaluate(config, prog, argv):
     log.info('  ↪ done.')
     log.info('Checking maintainers')
 >>>>>>> 10d8db3... bin/pasta_offlist_evaluate.py
+=======
+    offlist = pd.merge(offlist, df_repo, on = 'upstream', how='left')
+>>>>>>> d2a6584... Add new script to pasta
 
     offlist['author_is_maintainer'] = offlist.apply(check_if_maintainer, axis=1)
     
