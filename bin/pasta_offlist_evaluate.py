@@ -65,24 +65,18 @@ def offlist_evaluate(config, prog, argv):
     df_repo['files'] = df_repo['commit_obj'].map(get_commit_files)
     df_repo.drop('commit_obj', inplace=True, axis=1)
 
-<<<<<<< HEAD
+
     patch_denorm_upstream = \
         pd.read_csv('resources/linux/resources/patch_denorm_upstream.csv')
     offlist = patch_denorm_upstream[patch_denorm_upstream['patch_id']=='_']\
                                                                   [['upstream']]
     offlist.dropna(inplace=True)
 
-<<<<<<< HEAD
-    offlist = pd.merge(offlist, df_repo, on = 'commit', how='left')
-=======
     offlist = pd.merge(offlist, df_repo, on = 'upstream', how='left')
         
     log.info('  ↪ done.')
     log.info('Checking maintainers')
->>>>>>> 10d8db3... bin/pasta_offlist_evaluate.py
-=======
-    offlist = pd.merge(offlist, df_repo, on = 'upstream', how='left')
->>>>>>> d2a6584... Add new script to pasta
+
 
     offlist['author_is_maintainer'] = offlist.apply(check_if_maintainer, axis=1)
     
