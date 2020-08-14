@@ -9,6 +9,7 @@ Authors:
 This work is licensed under the terms of the GNU GPL, version 2. See
 the COPYING file in the top-level directory.
 """
+import csv
 
 from logging import getLogger
 
@@ -88,13 +89,10 @@ def offlist(config, prog, argv):
     def write_dict(dct, filename):
         as_list = list(dct.items())
         as_list.sort(key=lambda x: len(x[1]))
-
         with open(filename, 'w') as f:
+            writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
             for mail, elems in as_list:
-                f.write('%s (%u):\n' % (mail, len(elems)))
-                for elem in elems:
-                    f.write('  %s\n' % elem)
-                f.write('\n')
+                writer.writerow([ mail, ','.join(elems)])
 
     for downstream, upstream in clustering.iter_split():
         len_orig = len(downstream)
@@ -138,12 +136,12 @@ def offlist(config, prog, argv):
         #if upstream not in rc_commits:
         #    continue
 
-    f_result = '/tmp/cluster'
+    f_result = 'cluster'
     log.info('Saving resulting cluster to %s' % f_result)
     clustering_result.to_file(f_result)
 
-    write_dict(by_committer, '/tmp/by_committer')
-    write_dict(by_author, '/tmp/by_author')
+    write_dict(by_committer, 'by_committer')
+    write_dict(by_author, 'by_author')
 
     log.info('Some stats:')
     log.info('  Skipped no upstream: %u' % stats_no_upstream)
