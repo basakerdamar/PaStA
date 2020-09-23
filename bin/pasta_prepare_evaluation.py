@@ -285,7 +285,7 @@ def pre_process_response_data(config):
 
     with open(config.f_responses_pkl, 'rb') as handle:
         response_df = pickle.load(handle)
-
+    response_df = pd.DataFrame(response_df)
     # Convert set to list
     response_df['upstream'] = response_df['upstream'].map(list)
 
