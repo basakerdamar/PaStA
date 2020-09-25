@@ -34,20 +34,9 @@ from multiprocessing import Pool, cpu_count
 from subprocess import call
 
 from pypasta.LinuxMaintainers import load_maintainers
-from pypasta import LinuxMailCharacteristics, load_linux_mail_characteristics
+from pypasta.LinuxMailCharacteristics import LinuxMailCharacteristics, load_linux_mail_characteristics, email_get_from
 
 from analyses import response_analysis
-
-def email_get_header_normalised(message, header):
-    header = str(message[header] or '').lower()
-    header = header.replace('\n', '').replace('\t', ' ')
-
-    return header
-
-
-def email_get_from(message):
-    mail_from = email_get_header_normalised(message, 'From')
-    return email.utils.parseaddr(mail_from)
 
 sys.path.append(os.path.join(os.path.abspath(os.pardir), 'analyses'))
 
@@ -111,7 +100,7 @@ def get_relevant_patches(characteristics):
             skipped_not_first_patch += 1
             skip = True
 
-        if c.is_from_bot[0]:
+        if c.is_from_bot:
             skipped_bot += 1
             skip = True
         if c.is_stable_review:
@@ -166,7 +155,8 @@ def prepare_ignored_patches(config, clustering):
     all_messages_in_time_window = repo.mbox.get_ids(config.mbox_time_window,
                                                     allow_invalid=True)
 
-    tags = {repo.linux_patch_get_version(repo[x]) for x in patches}
+    tags = {x[0] for x in repo.tags if not x[0].startswith('v2.6')}
+    tags |= {x[0] for x in repo.tags if x[0].startswith('v2.6.39')}
     maintainers_version = load_maintainers(config, tags)
     characteristics = \
         load_linux_mail_characteristics(config, maintainers_version, clustering,
@@ -181,7 +171,7 @@ def prepare_ignored_patches(config, clustering):
                        not characteristics[patch].has_foreign_response}
 
     # Calculate ignored patches wrt to other patches in the cluster: A patch is
-    # considered as ignored, if all related patches were ignored as well
+    # considered as ignored, if all related patches were ignoreed as well
     ignored_patches_related = \
         {patch for patch in ignored_patches if False not in
          [characteristics[x].has_foreign_response == False
@@ -215,7 +205,12 @@ def prepare_ignored_patches(config, clustering):
             mail_from = c.mail_from[1]
 
             for list in repo.mbox.get_lists(message_id):
-                list_matches_patch = c.list_matches_patch(list)
+                list_matches_patch = False
+                for subsys in c.maintainers.values():
+                    lists = subsys[0]
+                    if list in lists:
+                        list_matches_patch = True
+                        break
 
                 row = {'id': message_id,
                        'from': mail_from,
@@ -287,60 +282,22 @@ def prepare_patch_review(config, clustering):
 
 def pre_process_response_data(config):
     # Load responses dict into dataframe, preliminary processing, indexing
-    # Idea: We do the following transformation in the preprocess step:
-    # We split the response_df into two parts: responses and upstream. This split is necessary
-    # for the following reasons:
-    # 1. responses and upstream columns have different datatypes: dict vs set, and hence need to be handled differently.
-    # 2. for bigger datasets, this also keeps the memory needs in check: we merge these two parts in the merge step,
-    # and hence the intermediate (huge) dataframes are not in memory anymore at one time making it computationally
-    # feasible given the systems' constraints with decent performance.
-    # The two parts which are output after this step: f_denorm_responses and f_denorm_upstream, need to be merged
-    # back together later such that the resulting dataframe has the following property:
-    # One row for each unique patch_id, response (and response details, e.g. parent), and upstream.
-    #
-    # Example: Entry p1, u1, u2 in patch-groups, with two responses r1, r2 for p1
-    #                               where p1 is a patch with two linked upstream commits, u1 and u2
-    # Denormalizing responses would yield the following two rows -
-    #               p1, r1
-    #               p1, r2
-    # Denormalizing upstream would yield the following two rows -
-    #               p1, u1
-    #               p1, u2
-    # The merge on patch id in the next step would then yield the following rows -
-    #               p1, r1, u1
-    #               p1, r2, u1
-    #               p1, r1, u2
-    #               p1, r2, u2
-    # Advantage of such a data transformation: possibility to aggregate a variety of statistics, e.g.:
-    # Patch to responses, and all the details for that response (authors, various email tags, message details
-    # like length etc.), upstream to responses (and response characteristics as before), upstream to patch details, etc.
-    #
-    # Index: Merge works efficiently when we join on an index.
-    #
-
 
     with open(config.f_responses_pkl, 'rb') as handle:
         response_df = pickle.load(handle)
+    response_df = pd.DataFrame(response_df)
+    # Convert set to list
+    response_df['upstream'] = response_df['upstream'].map(list)
 
-    # Give a name to the numerical index
     response_df.index.name = "idx"
 
-    # Fill null patch ids with a value '_'
     response_df.fillna({'patch_id': '_'}, inplace=True)
     log.info("Filled NA for patch_id")
 
-    # Append patch_id to the index such that we have a MultiIndex (idx, patch_id)
-    # This is a decision for two reasons:
-    # 1. patch_id cannot uniquely identify a row, e.g. when it is null ('_')
-    # 2. Many analysis are easier with MultiIndex, without needing a groupby
     response_df.set_index(['patch_id'], append=True, inplace=True)
     log.info("Done setting index for response_df")
 
-    # Denormalize responses and upstream
-
-    # Denormalize responses
-    # Pandas melt is used to bring the data in the given de-normalized form.
-    # reset_index operation preserves the index as a column, which otherwise could be lost
+    # Denormalize
     df_melt_responses = pd.melt(response_df.responses.apply(pd.Series).reset_index(),
                                 id_vars=['idx', 'patch_id'],
                                 value_name='responses').sort_index()
@@ -351,16 +308,11 @@ def pre_process_response_data(config):
 
     df_denorm_responses = flat_table.normalize(df_melt_responses, expand_dicts=True, expand_lists=True)
     df_denorm_responses.drop('index', axis=1, inplace=True)
-    df_denorm_responses.drop_duplicates(subset=['responses.resp_msg_id', 'responses.parent', 'patch_id'], inplace=True)
+    df_denorm_responses.drop_duplicates(inplace=True)
     log.info("Computed de-normalized responses, writing to disk...")
 
     df_denorm_responses.to_csv(config.f_denorm_responses, index=False)
     log.info("Processed responses!")
-
-    # Denormalize responses
-
-    # Convert set to list: This is necessary to apply pd.Series for converting set type column to individual rows
-    response_df['upstream'] = response_df['upstream'].map(list)
 
     df_melt_upstream = pd.melt(response_df.upstream.apply(pd.Series).reset_index(),
                                id_vars=['idx', 'patch_id'],
@@ -411,7 +363,7 @@ def merge_pre_processed_response_dfs(config):
                                                                     "upstream": "category"}).drop('Unnamed: 0', axis=1)
 
     print("Final shape with possible duplicate rows{}".format(final.shape))
-    final.drop_duplicates(subset=['responses.resp_msg_id', 'upstream', 'patch_id'], inplace=True)
+    final.drop_duplicates(inplace=True)
 
     # Convert to pandas
     df_pd_final = final.compute()
@@ -461,7 +413,7 @@ def parseaddr_unicode(addr) -> (str, str):
                 except UnicodeDecodeError:
                     encoding = chardet.detect(decoded_string)['encoding']
                     try:
-                        name = decoded_string.decode(encoding=encoding, errors='ignore')
+                        name = decoded_string.decode(encoding)
                     except TypeError:
                         name = str(decoded_string, 'utf-8', errors='ignore')
             else:
@@ -563,7 +515,7 @@ def filter_bots(config, clustering):
         (lambda row: check_person_duplicates(row.patch_id, row.resp_msg_id, row.patch_author, row.responder)),
         axis=1), meta=pd.Series([], dtype=object, name='row'))
 
-    final_dedup.to_csv('filtered_responses.csv', single_file=True)
+    final_dedup.to_csv('resources/linux/resources/filtered_responses.csv', single_file=True)
 
     log.info("Written filtered response dataframe to disk, Done!")
 
@@ -619,4 +571,4 @@ def prepare_evaluation(config, argv):
         elif analysis_option.review == 'filter':
             filter_bots(config, clustering)
         else:
-            response_analysis.analyse_responses('filtered_responses.csv')
+            response_analysis.analyse_responses('resources/linux/resources/filtered_responses.csv')
