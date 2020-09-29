@@ -35,6 +35,7 @@ from subprocess import call
 
 from pypasta.LinuxMaintainers import load_maintainers
 from pypasta.LinuxMailCharacteristics import LinuxMailCharacteristics, load_linux_mail_characteristics, email_get_from
+import pandas as pd
 
 from analyses import response_analysis
 
@@ -515,7 +516,7 @@ def filter_bots(config, clustering):
         (lambda row: check_person_duplicates(row.patch_id, row.resp_msg_id, row.patch_author, row.responder)),
         axis=1), meta=pd.Series([], dtype=object, name='row'))
 
-    final_dedup.to_csv('resources/linux/resources/filtered_responses.csv', single_file=True)
+    final_dedup.to_csv(config.f_filtered_responses, single_file=True)
 
     log.info("Written filtered response dataframe to disk, Done!")
 
@@ -571,4 +572,5 @@ def prepare_evaluation(config, argv):
         elif analysis_option.review == 'filter':
             filter_bots(config, clustering)
         else:
-            response_analysis.analyse_responses('resources/linux/resources/filtered_responses.csv')
+            response_analysis.analyse_responses(config.f_filtered_responses)
+
