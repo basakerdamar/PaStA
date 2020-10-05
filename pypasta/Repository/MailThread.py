@@ -83,7 +83,7 @@ class MailThread:
         _mbox = self.mbox
 
         if parallelise:
-            with Pool(cpu_count()) as p:
+            with Pool(int(cpu_count()*0.25)) as p:
                 irt_list = list(tqdm(p.imap(get_irts, victims), total=length))
         else:
             irt_list = list(tqdm(map(get_irts, victims), total=length))
